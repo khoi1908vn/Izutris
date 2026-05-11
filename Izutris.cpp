@@ -31,7 +31,6 @@ struct ScoreEntry {
 };
 
 struct Config {
-    // Giá trị lưu trữ mặc định là Frame (f)
     int das = 8, arr = 0, sdf = 40, dcd = 0;
     bool uniformSkin = false;
     string skin = "██", emptySkin = ". ", ghostSkin = "##"; 
@@ -196,31 +195,25 @@ class Tetris {
     float flashLeftTimer = 0, flashRightTimer = 0;
     int linesClearedTotal = 0;
     vector<ScoreEntry> scores;
-    pair<int, int> kickData[8][5] = {
-        {{ 0, 0}, {-1, 0}, {-1,-1}, { 0, 2}, {-1, 2}},  
-        {{ 0, 0}, { 1, 0}, { 1, 1}, { 0,-2}, { 1,-2}},  
-        {{ 0, 0}, { 1, 0}, { 1,-1}, { 0, 2}, { 1, 2}},  
-        {{ 0, 0}, {-1, 0}, {-1, 1}, { 0,-2}, {-1,-2}},  
-        {{ 0, 0}, { 1, 0}, { 1,-1}, { 0, 2}, { 1, 2}},  
-        {{ 0, 0}, {-1, 0}, {-1, 1}, { 0,-2}, {-1,-2}},  
-        {{ 0, 0}, {-1, 0}, {-1,-1}, { 0, 2}, {-1, 2}},  
-        {{ 0, 0}, { 1, 0}, { 1, 1}, { 0,-2}, { 1,-2}}
+    // SRS Kick Data: key = oldState*10 + newState
+    map<int, vector<pair<int, int>>> srsOffsets = {
+        {01, {{0,0}, {-1,0}, {-1, 1}, {0,-2}, {-1,-2}}}, {10, {{0,0}, {1,0}, {1,-1}, {0,2}, {1,2}}},
+        {12, {{0,0}, {1,0}, {1,-1}, {0,2}, {1,2}}},     {21, {{0,0}, {-1,0}, {-1,1}, {0,-2}, {-1,-2}}},
+        {23, {{0,0}, {1,0}, {1,1}, {0,-2}, {1,-2}}},     {32, {{0,0}, {-1,0}, {-1,-1}, {0,2}, {-1,2}}},
+        {30, {{0,0}, {-1,0}, {-1,-1}, {0,2}, {-1,2}}},   {03, {{0,0}, {1,0}, {1,1}, {0,-2}, {1,-2}}},
+        // 180 Kicks (SRS-X / SRS+ style)
+        {02, {{0,0}, {0,1}, {1,1}, {-1,1}, {1,0}, {-1,0}, {0,-1}}}, {20, {{0,0}, {0,-1}, {-1,-1}, {1,-1}, {-1,0}, {1,0}, {0,1}}},
+        {13, {{0,0}, {1,0}, {1,2}, {1,1}, {0,2}, {0,1}, {1,-1}}},   {31, {{0,0}, {-1,0}, {-1,2}, {-1,1}, {0,2}, {0,1}, {-1,-1}}}
     };
-    pair<int, int> kickDataI[8][5] = {
-        {{ 0, 0}, {-2, 0}, { 1, 0}, {-2, 1}, { 1,-2}},  
-        {{ 0, 0}, {-1, 0}, { 2, 0}, {-1,-2}, { 2, 1}},  
-        {{ 0, 0}, { 2, 0}, {-1, 0}, { 2,-1}, {-1, 2}},  
-        {{ 0, 0}, { 1, 0}, {-2, 0}, { 1, 2}, {-2,-1}},  
-        {{ 0, 0}, { 2, 0}, {-1, 0}, { 2,-1}, {-1, 2}},  
-        {{ 0, 0}, { 1, 0}, {-2, 0}, { 1, 2}, {-2,-1}},  
-        {{ 0, 0}, {-2, 0}, { 1, 0}, {-2, 1}, { 1,-2}},  
-        {{ 0, 0}, {-1, 0}, { 2, 0}, {-1,-2}, { 2, 1}}
-    };
-    pair<int, int> kick180[4][8] = {
-        {{ 0,-1}, {-1,-1}, { 1,-1}, {-1, 0}, { 1, 0}, { 0, 1}, {-1, 1}, { 1, 1}}, 
-        {{ 1, 0}, { 1,-1}, { 1, 1}, { 0,-1}, { 0, 1}, {-1, 0}, {-1,-1}, {-1, 1}}, 
-        {{ 0, 1}, { 1, 1}, {-1, 1}, { 1, 0}, {-1, 0}, { 0,-1}, { 1,-1}, {-1,-1}}, 
-        {{-1, 0}, {-1, 1}, {-1,-1}, { 0, 1}, { 0,-1}, { 1, 0}, { 1, 1}, { 1,-1}}
+ // I piece kicks
+    map<int, vector<pair<int, int>>> srsOffsetsI = {
+        {01, {{0,0}, {-2,0}, {1,0}, {-2,-1}, {1,2}}},  {10, {{0,0}, {2,0}, {-1,0}, {2,1}, {-1,-2}}},
+        {12, {{0,0}, {-1,0}, {2,0}, {-1,2}, {2,-1}}},  {21, {{0,0}, {1,0}, {-2,0}, {1,-2}, {-2,1}}},
+        {23, {{0,0}, {2,0}, {-1,0}, {2,1}, {-1,-2}}},  {32, {{0,0}, {-2,0}, {1,0}, {-2,-1}, {1,2}}},
+        {30, {{0,0}, {1,0}, {-2,0}, {1,-2}, {-2,1}}},  {03, {{0,0}, {-1,0}, {2,0}, {-1,2}, {2,-1}}},
+        // 180 Kicks I
+        {02, {{0,1}, {0,2}, {-1,1}, {1,1}}}, {20, {{0,-1}, {0,-2}, {1,-1}, {-1,-1}}},
+        {13, {{-1,0}, {-2,0}, {-1,1}, {-1,-1}}}, {31, {{1,0}, {2,0}, {1,-1}, {1,1}}}
     };
 
 public:
@@ -288,6 +281,7 @@ public:
 
     bool gameOver = false, isPaused = false;
 
+    // --- Sửa lỗi T-Spin: Nhận diện theo số góc bị chặn ---
     int checkTSpin() {
         if (curPiece.type != 1 || !lastMoveWasRotate) return 0;
         int corners = 0;
@@ -407,7 +401,7 @@ public:
         if (k == "UP" || k == "w") menuCursor = (menuCursor - 1 + 4) % 4;
         else if (k == "DOWN" || k == "s") menuCursor = (menuCursor + 1) % 4;
         else if (k == "LEFT" || k == "a") {
-            if (menuCursor == 1) marathonLimit = min(200, marathonLimit + 10); // Đổi hướng
+            if (menuCursor == 1) marathonLimit = min(200, marathonLimit + 10); 
             if (menuCursor == 2) blitzTimeLimit = min(600, blitzTimeLimit + 30);
             flashLeftTimer = 100.0f;
         } else if (k == "RIGHT" || k == "d") {
@@ -438,17 +432,15 @@ public:
         if (k == "UP" || k == "w") menuCursor = (menuCursor - 1 + 5) % 5;
         else if (k == "DOWN" || k == "s") menuCursor = (menuCursor + 1) % 5;
         else if (k == "LEFT" || k == "a") {
-            // LEFT -> Tăng giá trị
             if(menuCursor == 0) cfg.arr++;
             else if(menuCursor == 1) cfg.das++;
-            else if(menuCursor == 2) { if(cfg.sdf < 100) cfg.sdf++; } // SDF max 100
+            else if(menuCursor == 2) { if(cfg.sdf < 100) cfg.sdf++; } 
             else if(menuCursor == 3) cfg.dcd++;
             flashLeftTimer = 100.0f;
         } else if (k == "RIGHT" || k == "d") {
-            // RIGHT -> Giảm giá trị
             if(menuCursor == 0) cfg.arr = max(0, cfg.arr - 1);
             else if(menuCursor == 1) cfg.das = max(0, cfg.das - 1);
-            else if(menuCursor == 2) cfg.sdf = max(0, cfg.sdf - 1); // 0 là INF
+            else if(menuCursor == 2) cfg.sdf = max(0, cfg.sdf - 1); 
             else if(menuCursor == 3) cfg.dcd = max(0, cfg.dcd - 1);
             flashRightTimer = 100.0f;
         } else if (k == " " || k == "\n" || k == "e") if(menuCursor == 4) { state = OPTION_MENU; cfg.save("setting.cfg"); menuCursor = 0; }
@@ -506,66 +498,49 @@ public:
         }
     }
 
+    // --- Cập nhật hàm Rotate sử dụng SRS ---
     void rotate(int r_mode) {
         if (curPiece.type == 2) return; 
 
         int oldState = curPiece.rotationState;
-        int newState = oldState;
+        int newState;
+        if (r_mode == 1)      newState = (oldState + 1) % 4; // CW
+        else if (r_mode == 2) newState = (oldState + 3) % 4; // CCW
+        else                  newState = (oldState + 2) % 4; // 180
+
         Piece nS = curPiece;
-        if (r_mode == 1) { 
-            newState = (oldState + 1) % 4;
-            for (auto& p : nS.cells) { int x = p.first, y = p.second; p.first = -y; p.second = x; }
-        } else if (r_mode == 2) { 
-            newState = (oldState + 3) % 4;
-            for (auto& p : nS.cells) { int x = p.first, y = p.second; p.first = y; p.second = -x; }
-        } else if (r_mode == 3) { 
-            newState = (oldState + 2) % 4;
-            for (auto& p : nS.cells) { int x = p.first, y = p.second; p.first = -x; p.second = -y; }
-        }
+        nS.rotationState = newState;
+
+        // Xoay tọa độ cells
         if (curPiece.type == 3) {
-            auto canon = getIShape(newState);
-            for (int i = 0; i < 4; i++) nS.cells[i] = canon[i];
-        }
-        if (r_mode == 3) {
-            if (!collision(curX, curY, nS)) {
-                curPiece = nS; curPiece.rotationState = newState; lastMoveWasRotate = true; return;
-            }
-            for (int i = 0; i < 8; i++) {
-                int dx = kick180[oldState][i].first;
-                int dy = kick180[oldState][i].second;
-                if (!collision(curX + dx, curY + dy, nS)) {
-                    curX += dx; curY += dy;
-                    curPiece = nS; curPiece.rotationState = newState; lastMoveWasRotate = true; return;
+            nS.cells = getIShape(newState);
+        } else {
+            int times = (r_mode == 3) ? 2 : (r_mode == 1 ? 1 : 3);
+            for(int t=0; t<times; t++) {
+                for (auto& p : nS.cells) {
+                    int x = p.first, y = p.second;
+                    p.first = -y; p.second = x; 
                 }
             }
-            return; 
         }
-        int tableIdx = -1;
-        if (r_mode == 1) { 
-            if      (oldState == 0) tableIdx = 0; 
-            else if (oldState == 1) tableIdx = 1; 
-            else if (oldState == 2) tableIdx = 2; 
-            else                    tableIdx = 3; 
-        } else { 
-            if      (oldState == 1) tableIdx = 4; 
-            else if (oldState == 2) tableIdx = 5; 
-            else if (oldState == 3) tableIdx = 6; 
-            else                    tableIdx = 7; 
-        }
-        for (int i = 0; i < 5; i++) {
-            int dx, dy;
-            if (curPiece.type == 3) { 
-                dx = kickDataI[tableIdx][i].first;
-                dy = kickDataI[tableIdx][i].second;
-            } else { 
-                dx = kickData[tableIdx][i].first;
-                dy = kickData[tableIdx][i].second;
-            }
+
+        // Kiểm tra Kick
+        int lookupKey = oldState * 10 + newState;
+        vector<pair<int, int>> kicks;
+        if (curPiece.type == 3) kicks = srsOffsetsI[lookupKey];
+        else kicks = srsOffsets[lookupKey];
+
+        // Mặc định thử vị trí hiện tại (0,0) nếu bảng trống
+        if (kicks.empty()) kicks.push_back({0, 0});
+
+        for (auto& offset : kicks) {
+            int dx = offset.first;
+            int dy = -offset.second; // SRS dùng Y dương là lên, game dùng Y dương là xuống
+
             if (!collision(curX + dx, curY + dy, nS)) {
                 curX += dx;
                 curY += dy;
                 curPiece = nS;
-                curPiece.rotationState = newState;
                 lastMoveWasRotate = true;
                 return;
             }
@@ -672,7 +647,6 @@ public:
             if (multiplier < MULTIPLIER_MIN) multiplier = MULTIPLIER_MIN;
         }
 
-        // Logic Handling theo Frame
         float dasMs = (float)cfg.das * 16.6667f;
         float arrMs = (float)cfg.arr * 16.6667f;
 
@@ -722,11 +696,9 @@ public:
         else { 
             lockTimer = 0; 
             fallTimer += dt; 
-            
-            // Tính toán Gravity thực tế dựa trên SDF
             float effectiveGravity = gravity;
             if (keyStates[cfg.kSoft] > 0) {
-                if (cfg.sdf == 0) effectiveGravity = 0.001f; // Chế độ INF
+                if (cfg.sdf == 0) effectiveGravity = 0.001f; 
                 else effectiveGravity = gravity / (float)cfg.sdf;
             }
 
@@ -965,7 +937,8 @@ public:
             if (decayFrac < 0) decayFrac = 0; if (decayFrac > 1) decayFrac = 1;
             int filled = (int)(decayFrac * barLen);
             string decayBar = "";
-            for (int i = 0; i < barLen; i++) decayBar += (i < filled ? "█" : " ");
+            for (int i = 0; i < filled; i++) decayBar += "█";
+            for (int i = filled; i < barLen; i++) decayBar += " ";
 
             char multBuf[24]; snprintf(multBuf, sizeof(multBuf), "x%.2f Mult", multiplier);
             string comboLine = "";
